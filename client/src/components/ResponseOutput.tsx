@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Copy, Check, RotateCcw, Brain, Shield, AlertTriangle, Target, HelpCircle, XCircle, Loader2 } from "lucide-react";
 import { Streamdown } from "streamdown";
-import { trpc } from "@/lib/trpc";
+import { generateCommunicationResponse, type GenerateResponse } from "@/lib/api";
 import { CoachingFeedback } from "./CoachingFeedback";
 import type { ConversationData, ContextData } from "@/pages/Home";
 
@@ -16,58 +16,42 @@ interface Props {
   onReset: () => void;
 }
 
-interface LLMResponse {
-  situation_read: string;
-  protecting: string[];
-  missing_info: string[];
-  recommended_response: string;
-  technique_applied: string;
-  what_not_to_say: { bad_example: string; why: string };
-  follow_up_question: string;
-  coaching?: {
-    scores: Record<string, number>;
-    total_score: number;
-    interpretation: string;
-    biggest_strength: string;
-    biggest_leak: string;
-    ethics_check: { status: string; details: string };
-    best_next_move: { technique: string; explanation: string };
-    practice_rep: string;
-  };
-}
-
 export function ResponseOutput({ conversationData, contextData, coachMode, onCoachModeToggle, onReset }: Props) {
   const [copied, setCopied] = useState(false);
-  const [response, setResponse] = useState<LLMResponse | null>(null);
+  const [response, setResponse] = useState<GenerateResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastCoachMode, setLastCoachMode] = useState(coachMode);
 
-  const generateMutation = trpc.communication.generate.useMutation({
-    onSuccess: (data) => {
-      setResponse(data as LLMResponse);
-    },
-  });
-
-  const runGeneration = useCallback((withCoachMode: boolean) => {
-    generateMutation.mutate({
-      channel: conversationData.channel,
-      direction: conversationData.direction,
-      conversation: conversationData.conversation,
-      context: contextData,
-      coachMode: withCoachMode,
-    });
-  }, [conversationData, contextData]); // eslint-disable-line react-hooks/exhaustive-deps
+  const runGeneration = useCallback(async (withCoachMode: boolean) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await generateCommunicationResponse({
+        channel: conversationData.channel,
+        direction: conversationData.direction,
+        conversation: conversationData.conversation,
+        context: contextData,
+        coachMode: withCoachMode,
+      });
+      setResponse(result);
+    } catch (e: any) {
+      setError(e.message || "Failed to generate response");
+    } finally {
+      setLoading(false);
+    }
+  }, [conversationData, contextData]);
 
   // Initial generation
   useEffect(() => {
     runGeneration(coachMode);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-run when coach mode is toggled (only if it changed and we need coaching data)
+  // Re-run when coach mode is toggled and we need coaching data
   useEffect(() => {
     if (coachMode !== lastCoachMode) {
       setLastCoachMode(coachMode);
       if (coachMode && !response?.coaching) {
-        // Need to re-generate with coaching enabled
         runGeneration(true);
       }
     }
@@ -80,7 +64,7 @@ export function ResponseOutput({ conversationData, contextData, coachMode, onCoa
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (generateMutation.isPending || !response) {
+  if (loading || !response) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -90,12 +74,12 @@ export function ResponseOutput({ conversationData, contextData, coachMode, onCoa
     );
   }
 
-  if (generateMutation.isError) {
+  if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <AlertTriangle className="w-8 h-8 text-destructive" />
         <div className="text-sm text-destructive">Failed to generate response</div>
-        <div className="text-xs text-muted-foreground">{generateMutation.error.message}</div>
+        <div className="text-xs text-muted-foreground">{error}</div>
         <Button variant="outline" onClick={onReset} className="mt-2 gap-1.5">
           <RotateCcw className="w-3.5 h-3.5" />
           Start Over
@@ -237,3 +221,4 @@ export function ResponseOutput({ conversationData, contextData, coachMode, onCoa
     </div>
   );
 }
+

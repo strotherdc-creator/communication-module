@@ -14,4 +14,10 @@
 - [x] Add PHI disclaimer/reminder in UI
 - [x] Write vitest tests for backend procedures
 - [x] Write documentation for next agent (FAQ/grading features)
-
+- [x] Rebuild: Strip all Manus-specific dependencies (tRPC, Manus OAuth, Manus LLM proxy)
+- [x] Rebuild: Create LLM-agnostic provider interface (swappable function for any AI)
+- [x] Rebuild: Standalone Express API with single /api/generate endpoint
+- [x] Rebuild: Portable React component with no vendor lock-in
+- [x] Rebuild: System prompt as standalone importable file
+- [x] Rebuild: Handoff documentation for next agent (integration guide, provider setup)
+- [x] Rebuild: Tests for the portable API

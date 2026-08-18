@@ -1,73 +1,170 @@
-# Communication Response Module
+# Communication Response Module — Portable Handoff Package
 
-A blended ethical communication feedback tool for healthcare and wellness staff. Staff input text messages, emails, or verbal conversation summaries and receive AI-generated response recommendations that ethically influence patients toward healthy action.
+A blended ethical communication feedback tool for healthcare and wellness staff. This module is **LLM-agnostic** and designed to be embedded into any React-based training website with a standard Express backend.
 
-## Overview
+---
 
-This module synthesizes two complementary communication disciplines — tactical empathy/negotiation structure and behavioral observation/ethical authority — into a single unified system. The methodology is proprietary and de-branded (no external framework names appear in the tool).
+## Architecture Overview
 
-## Features
+This project has two independent layers that communicate via a single REST endpoint:
 
-- **Multi-channel support**: Text messages, emails, and verbal conversation coaching
-- **Efficient context gathering**: 3-5 dynamic questions (tone, stage, outcome, obstacles, urgency)
-- **AI-generated responses**: Channel-appropriate, ready-to-use reply drafts
-- **Copy to clipboard**: One-click copy for text/email responses
-- **Coach Me mode**: Optional scorecard (/24), strength/leak analysis, ethics check, practice reps
-- **Ethics override**: Hard-stop rules prevent manipulative, fear-based, or pressure-based responses
-- **Mobile responsive**: Works on phones (staff often respond to texts on mobile)
-- **Embeddable**: No branding, designed to be embedded in a staff training website
+| Layer | Technology | Key Files |
+|-------|-----------|-----------|
+| **API** (backend) | Express.js + TypeScript | `server/routers.ts`, `server/generate.ts`, `server/llm-provider.ts`, `server/system-prompt.ts` |
+| **UI** (frontend) | React 19 + TailwindCSS 4 + shadcn/ui | `client/src/pages/Home.tsx`, `client/src/components/`, `client/src/lib/api.ts` |
 
-## Tech Stack
+The frontend calls `POST /api/generate` with conversation data and context. The backend builds a prompt from the system prompt + user input, calls whatever LLM is configured, and returns structured JSON.
 
-| Component | Technology |
-|-----------|-----------|
-| Frontend | React 19 + TypeScript + TailwindCSS 4 + shadcn/ui |
-| Backend | Express + tRPC 11 |
-| LLM | Built-in Manus LLM API (OpenAI-compatible) |
-| State | Stateless per-request (no patient data stored) |
-| Auth | Manus OAuth (optional, module works without auth) |
+---
 
-## Architecture
+## LLM Provider Configuration
+
+The LLM integration lives in a single file: **`server/llm-provider.ts`**. It uses the OpenAI-compatible chat completions format, which works with most providers out of the box.
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `LLM_API_KEY` | **Yes** | — | API key for your chosen provider |
+| `LLM_BASE_URL` | No | `"https://api.openai.com/v1"` | Base URL including version path (the module appends `/chat/completions`) |
+| `LLM_MODEL` | No | `"gpt-4o"` | Model ID to use |
+
+### Supported Providers (OpenAI-compatible format)
+
+| Provider | `LLM_BASE_URL` | `LLM_MODEL` example |
+|----------|---------------|---------------------|
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o`, `gpt-4o-mini` |
+| Anthropic (compatible) | `https://api.anthropic.com/v1` | `claude-sonnet-4-20250514` |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` |
+| Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| Together AI | `https://api.together.xyz/v1` | `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo` |
+| Ollama (local) | `http://localhost:11434/v1` | `llama3.1` |
+| LM Studio (local) | `http://localhost:1234/v1` | `loaded-model` |
+
+If your provider uses a non-OpenAI format (e.g., native Anthropic Messages API), replace the `callLLM()` function body in `server/llm-provider.ts` with the appropriate SDK call. The interface (`LLMRequest` → `LLMResponse`) stays the same.
+
+---
+
+## File Structure (What Matters for Integration)
 
 ```
-client/src/
-  pages/Home.tsx              → Main page (step flow: input → context → output)
-  components/
-    ConversationInput.tsx     → Step 1: Channel, direction, conversation text
-    ContextGathering.tsx      → Step 2: Tone, stage, outcome, obstacles, urgency
-    ResponseOutput.tsx        → Step 3: AI response display + copy + coaching
-
 server/
-  routers.ts                  → tRPC procedure: communication.generate
+  llm-provider.ts       ← THE FILE TO SWAP for different AI providers
+  system-prompt.ts      ← The proprietary methodology (your IP)
+  generate.ts           ← Builds the user prompt + calls LLM + parses response
+  routers.ts            ← Express Router with POST /api/generate + GET /api/health
 
-prompts/ (project shared files)
-  unified-system.md           → Full system prompt (the core IP)
-  response-mode.md            → Response generation instructions
-  coaching-mode.md            → Scorecard/feedback instructions
+client/src/
+  lib/api.ts            ← Frontend API client (plain fetch, no dependencies)
+  pages/Home.tsx        ← Step flow controller (input → context → output)
+  components/
+    ConversationInput.tsx   ← Step 1: Channel, direction, paste text
+    ContextGathering.tsx    ← Step 2: Tone, stage, outcome, obstacles
+    ResponseOutput.tsx      ← Step 3: Display AI response + copy button
+    CoachingFeedback.tsx    ← Optional: Scorecard when Coach Me is on
 ```
 
-## How It Works
+---
 
-1. Staff pastes a text/email or describes a verbal conversation
-2. System asks 3-5 quick context questions (only what it can't infer)
-3. Backend sends conversation + context to LLM with the unified system prompt
-4. LLM returns structured JSON: situation read, response, technique, what not to say, follow-up
-5. Frontend renders the response with copy-to-clipboard
-6. Optional: Coach Me mode adds scorecard, strength/leak, ethics check, practice rep
+## How to Integrate Into Your Training Website
 
-## Environment Variables
+### Option 1: Mount the API route in your existing Express app
 
-The module uses the built-in Manus LLM API. No additional API keys are required for the core functionality. The following are pre-configured:
+```ts
+import { api } from "./communication-module/server/routers";
 
-- `BUILT_IN_FORGE_API_URL` — LLM API endpoint
-- `BUILT_IN_FORGE_API_KEY` — LLM API authentication
+// In your existing Express app:
+app.use("/api/communication", api);
+```
 
-## Running Locally
+Then point the frontend `API_BASE` in `client/src/lib/api.ts` to `/api/communication`.
+
+### Option 2: Run as a standalone microservice
 
 ```bash
+cd communication-module
 pnpm install
-pnpm dev
+pnpm dev        # Development with hot reload
+pnpm build      # Production build
+pnpm start      # Run production server
 ```
+
+### Option 3: Embed the React components into an existing React app
+
+Copy these files into your project:
+- `client/src/components/ConversationInput.tsx`
+- `client/src/components/ContextGathering.tsx`
+- `client/src/components/ResponseOutput.tsx`
+- `client/src/components/CoachingFeedback.tsx`
+- `client/src/pages/Home.tsx` (the orchestrator)
+- `client/src/lib/api.ts` (the fetch client)
+
+Update the `API_BASE` constant in `api.ts` to point to wherever you host the Express API.
+
+---
+
+## Railway Deployment
+
+This project is Railway-ready. The `pnpm build` command produces a production bundle and `pnpm start` runs the Express server.
+
+**Required environment variables on Railway:**
+
+```
+LLM_API_KEY=your-api-key-here
+LLM_BASE_URL=https://api.openai.com/v1   # or your provider (include /v1)
+LLM_MODEL=gpt-4o                          # or your model
+PORT=3000                                  # Railway sets this automatically
+```
+
+Optional for separate frontend hosting:
+```
+VITE_API_BASE_URL=https://your-api.railway.app/api
+```
+
+---
+
+## API Reference
+
+### `POST /api/generate`
+
+**Request body:**
+
+```json
+{
+  "channel": "text" | "email" | "verbal",
+  "direction": "incoming" | "outgoing" | "both",
+  "conversation": "The actual conversation text...",
+  "context": {
+    "emotional_tone": "frustrated",
+    "relationship_stage": "new_lead",
+    "desired_outcome": "Schedule consultation",
+    "known_obstacles": "price, time",
+    "urgency": "this_week"
+  },
+  "coachMode": false
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "situation_read": "...",
+  "protecting": ["concern1", "concern2"],
+  "missing_info": ["question1", "question2"],
+  "recommended_response": "The actual response to send...",
+  "technique_applied": "...",
+  "what_not_to_say": { "bad_example": "...", "why": "..." },
+  "follow_up_question": "...",
+  "coaching": { ... }  // Only present when coachMode=true
+}
+```
+
+### `GET /api/health`
+
+Returns `{ "status": "ok", "timestamp": "..." }`
+
+---
 
 ## Testing
 
@@ -75,101 +172,43 @@ pnpm dev
 pnpm test
 ```
 
-## Deployment
-
-This project is designed for Railway deployment. The `pnpm build` command produces a production bundle, and `pnpm start` runs the Express server.
+Tests validate input schema enforcement and the health endpoint. They do not require an LLM API key.
 
 ---
 
-## NEXT AGENT INSTRUCTIONS
+## Phase 2 Features (For Next Agent)
 
-### Phase 2 Features to Build
+After integrating this module into the training website, build these features:
 
-The following features should be added by the next coding agent after reviewing this codebase:
+### 1. FAQ Feedback Engine
 
-#### 1. FAQ Feedback Engine
+Store common conversation patterns and pre-generated responses. Check incoming conversations against known patterns before calling the LLM (saves cost and latency). Track which patterns are used most.
 
-Build a system that collects frequently asked questions and common conversation patterns, then pre-generates response templates for the most common scenarios.
+### 2. Response History + Active Grading
 
-**Implementation approach:**
-- Add a database table `faq_entries` with columns: `id`, `category`, `scenario_description`, `recommended_response`, `technique_used`, `created_at`, `usage_count`
-- Create an admin interface to add/edit FAQ entries
-- When a new conversation is submitted, check if it matches a known FAQ pattern before calling the LLM (saves cost and latency)
-- Track which FAQ entries are used most often
+Store conversation submissions and outcomes. After staff uses a generated response, prompt them 24-48 hours later: "What happened?" Options: converted, declined, no_response, follow_up_needed. Build a dashboard showing conversion rates by channel, average scores over time, and improvement trends per staff member.
 
-#### 2. Response History & Active Grading
+### 3. Staff Improvement Tracking
 
-Build a system that stores conversation submissions and their outcomes, enabling active grading based on results.
+Track Coach Me scores over time per user. Show trend lines and identify recurring weaknesses. Weekly digest: top 3 improvements, top 1 area to focus on.
 
-**Implementation approach:**
-- Add database table `conversation_logs`: `id`, `user_id`, `channel`, `direction`, `conversation_text`, `context_json`, `ai_response_json`, `created_at`
-- Add database table `outcome_grades`: `id`, `conversation_log_id`, `outcome` (enum: converted, declined, no_response, follow_up_needed), `staff_notes`, `graded_at`
-- After receiving the AI response, staff can later come back and grade the outcome
-- Build a dashboard showing: conversion rates by channel, average scores over time, most common obstacles, improvement trends per staff member
-- Add a "What happened?" follow-up prompt that appears 24-48 hours after a response is generated
+---
 
-#### 3. Staff Improvement Tracking
+## Ethical Guardrails (DO NOT REMOVE)
 
-**Implementation approach:**
-- Track Coach Me scores over time per staff member
-- Show trend lines: "Your average score went from 14/24 to 19/24 over 30 days"
-- Identify recurring weaknesses: "You consistently score low on Qualification — here's a focused exercise"
-- Weekly digest: top 3 improvements, top 1 area to focus on
+The system prompt in `server/system-prompt.ts` contains critical ethical guardrails. These must **never** be weakened, removed, or bypassed. They are the legal and ethical foundation of the tool. Any modification must preserve the NEVER list, the ALWAYS list, the contradiction resolution hierarchy, and the ethics override priority.
 
-#### 4. Role-Play Mode (Future)
+---
 
-Add an interactive role-play mode where the AI acts as a prospect and the staff member practices in real-time, then receives feedback.
+## Dependencies
 
-### Key Files to Understand
+| Package | Purpose | Removable? |
+|---------|---------|-----------|
+| `express` | API server | No (core) |
+| `react`, `react-dom` | UI framework | No (core) |
+| `tailwindcss` | Styling | Swap if your site uses different CSS |
+| `lucide-react` | Icons | Swap for any icon library |
+| `streamdown` | Markdown rendering | Swap for any markdown renderer |
+| `shadcn/ui` (radix) | UI components | Already in your project? Reuse. |
 
-| File | Purpose |
-|------|---------|
-| `server/routers.ts` | The main tRPC procedure — contains the system prompt and LLM call |
-| `client/src/components/ResponseOutput.tsx` | The response display component — where grading UI would be added |
-| `client/src/pages/Home.tsx` | The step flow controller — where history/FAQ routing would be added |
-| Project shared files: `prompts/unified-system.md` | The full system prompt (reference for understanding the methodology) |
-| Project shared files: `contradiction_audit.md` | Documents resolved contradictions between source methodologies |
-
-### Database Schema for Phase 2
-
-```sql
-CREATE TABLE faq_entries (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  category VARCHAR(64) NOT NULL,
-  scenario_description TEXT NOT NULL,
-  recommended_response TEXT NOT NULL,
-  technique_used VARCHAR(128),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  usage_count INT DEFAULT 0
-);
-
-CREATE TABLE conversation_logs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT,
-  channel ENUM('text', 'email', 'verbal') NOT NULL,
-  direction ENUM('incoming', 'outgoing', 'both') NOT NULL,
-  conversation_text TEXT NOT NULL,
-  context_json JSON,
-  ai_response_json JSON,
-  coach_mode BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE outcome_grades (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  conversation_log_id INT NOT NULL,
-  outcome ENUM('converted', 'declined', 'no_response', 'follow_up_needed') NOT NULL,
-  staff_notes TEXT,
-  graded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (conversation_log_id) REFERENCES conversation_logs(id)
-);
-```
-
-### Ethical Guardrails (DO NOT REMOVE)
-
-The system prompt in `server/routers.ts` contains critical ethical guardrails. These must NEVER be weakened, removed, or bypassed. They are the legal and ethical foundation of the tool. Any modification to the system prompt must preserve:
-- The NEVER list (no fear amplification, no pressure, no identity capture, etc.)
-- The ALWAYS list (truth, autonomy, transparency, etc.)
-- The contradiction resolution hierarchy
-- The ethics override priority (strictest rule wins)
+The backend has **zero** vendor-specific dependencies. It's just Express + fetch.
