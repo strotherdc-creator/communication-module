@@ -1,4 +1,4 @@
-# Communication Response Module — Portable Handoff Package
+# Communication Response Module
 
 A blended ethical communication feedback tool for healthcare and wellness staff. This module is **LLM-agnostic** and designed to be embedded into any React-based training website with a standard Express backend.
 
@@ -11,9 +11,25 @@ This project has two independent layers that communicate via a single REST endpo
 | Layer | Technology | Key Files |
 |-------|-----------|-----------|
 | **API** (backend) | Express.js + TypeScript | `server/routers.ts`, `server/generate.ts`, `server/llm-provider.ts`, `server/system-prompt.ts` |
-| **UI** (frontend) | React 19 + TailwindCSS 4 + shadcn/ui | `client/src/pages/Home.tsx`, `client/src/components/`, `client/src/lib/api.ts` |
+| **UI** (frontend) | React 19 + TailwindCSS 4 + shadcn/ui | `client/src/pages/Home.tsx`, `client/src/lib/api.ts` |
 
 The frontend calls `POST /api/generate` with conversation data and context. The backend builds a prompt from the system prompt + user input, calls whatever LLM is configured, and returns structured JSON.
+
+---
+
+## UX Design (Single-Page Flow)
+
+The UI is a **single-page flow** — no steps, no wizard, no abstract labels:
+
+1. **Paste the conversation** — big text box, front and center
+2. **"What do you want to happen?"** — one line input
+3. **Quick toggles** — text/email/verbal + who sent it (They did / I did / Both)
+4. **"Add more context (optional)"** — collapsible section with tone, relationship stage, obstacles, Coach Me toggle
+5. **"Get Response"** — one big button
+6. **Result** — appears below with the response prominently displayed + Copy button, plus supporting sections (what's happening, what they're protecting, why this works, don't say this, if they go silent, scorecard)
+7. **"New Conversation"** — reset button at the bottom
+
+This design prioritizes doctors 45-65 who want to get help fast without navigating a multi-step form.
 
 ---
 
@@ -56,12 +72,9 @@ server/
 
 client/src/
   lib/api.ts            ← Frontend API client (plain fetch, no dependencies)
-  pages/Home.tsx        ← Step flow controller (input → context → output)
+  pages/Home.tsx        ← Single-page flow (input → generate → result)
   components/
-    ConversationInput.tsx   ← Step 1: Channel, direction, paste text
-    ContextGathering.tsx    ← Step 2: Tone, stage, outcome, obstacles
-    ResponseOutput.tsx      ← Step 3: Display AI response + copy button
-    CoachingFeedback.tsx    ← Optional: Scorecard when Coach Me is on
+    CoachingFeedback.tsx ← Optional: Scorecard when Coach Me is on
 ```
 
 ---
@@ -89,15 +102,12 @@ pnpm build      # Production build
 pnpm start      # Run production server
 ```
 
-### Option 3: Embed the React components into an existing React app
+### Option 3: Embed the React page into an existing React app
 
 Copy these files into your project:
-- `client/src/components/ConversationInput.tsx`
-- `client/src/components/ContextGathering.tsx`
-- `client/src/components/ResponseOutput.tsx`
-- `client/src/components/CoachingFeedback.tsx`
-- `client/src/pages/Home.tsx` (the orchestrator)
+- `client/src/pages/Home.tsx` (the single-page UI)
 - `client/src/lib/api.ts` (the fetch client)
+- `client/src/components/CoachingFeedback.tsx` (optional, for Coach Me scorecard)
 
 Update the `API_BASE` constant in `api.ts` to point to wherever you host the Express API.
 
@@ -156,7 +166,7 @@ VITE_API_BASE_URL=https://your-api.railway.app/api
   "technique_applied": "...",
   "what_not_to_say": { "bad_example": "...", "why": "..." },
   "follow_up_question": "...",
-  "coaching": { ... }  // Only present when coachMode=true
+  "coaching": { ... }
 }
 ```
 
@@ -208,7 +218,7 @@ The system prompt in `server/system-prompt.ts` contains critical ethical guardra
 | `react`, `react-dom` | UI framework | No (core) |
 | `tailwindcss` | Styling | Swap if your site uses different CSS |
 | `lucide-react` | Icons | Swap for any icon library |
-| `streamdown` | Markdown rendering | Swap for any markdown renderer |
+| `sonner` | Toast notifications | Swap for any toast library |
 | `shadcn/ui` (radix) | UI components | Already in your project? Reuse. |
 
 The backend has **zero** vendor-specific dependencies. It's just Express + fetch.
