@@ -11,7 +11,7 @@ export default function Home() {
   const [desiredOutcome, setDesiredOutcome] = useState("");
   const [channel, setChannel] = useState<Channel>("text");
   const [direction, setDirection] = useState<Direction>("incoming");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(true);
   const [emotionalTone, setEmotionalTone] = useState("");
   const [relationshipStage, setRelationshipStage] = useState("");
   const [knownObstacles, setKnownObstacles] = useState("");
@@ -63,7 +63,7 @@ export default function Home() {
     setConversation("");
     setDesiredOutcome("");
     setResult(null);
-    setShowAdvanced(false);
+    setShowAdvanced(true);
     setEmotionalTone("");
     setRelationshipStage("");
     setKnownObstacles("");
@@ -165,14 +165,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Advanced context (collapsible) */}
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              {showAdvanced ? "Hide extra context" : "Add more context (optional)"}
-            </button>
+            {/* Extra context — always visible */}
+            <p className="text-base font-bold text-foreground">Extra context (optional)</p>
 
             {showAdvanced && (
               <div className="space-y-3 pl-2 border-l-2 border-primary/30">
