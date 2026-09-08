@@ -113,6 +113,44 @@ Update the `API_BASE` constant in `api.ts` to point to wherever you host the Exp
 
 ---
 
+---
+
+## Synapse deep-link (v1)
+
+Communication Coach is a **separate SPA**. Synapse (or any host) opens the public base URL with query params — no same-origin embed/proxy required.
+
+**Entry:** `/`
+
+**Query params:**
+
+| Param | Purpose |
+|-------|---------|
+| `coach` / `coachMode` | `1` / `true` enables Coach Me |
+| `outcome` | Prefills “What do you want to happen?” |
+| `channel` | `text` \| `email` \| `verbal` |
+| `direction` | `incoming` \| `outgoing` \| `both` |
+| `tone` | Emotional tone (e.g. `anxious`) |
+| `stage` | Relationship stage (e.g. `new_lead`) |
+| `obstacles` | Known obstacles text |
+| `urgency` | Urgency hint |
+| `conversation` | Optional seed text (keep short; no PHI) |
+| `scriptId` | Opaque curriculum label (shown as badge) |
+| `planStepId` | Opaque Synapse step id |
+| `returnUrl` | Absolute **https** URL to return to (required for Done) |
+
+**Done / back to plan:** when `returnUrl` is present, the UI shows **Done**. Clicking it:
+1. `postMessage({ type: "comm-coach-complete", planStepId }, returnUrl.origin)` to `window.opener` if any
+2. Redirects to `returnUrl` with `commCoach=done` and `planStepId` appended
+
+Invalid `returnUrl` values (`http:`, `javascript:`, relative) are rejected — no redirect.
+
+**Example:**
+```
+{COMM_BASE}/?coach=1&outcome=Schedule%20consult&channel=verbal&direction=incoming&planStepId=step-9&returnUrl=https%3A%2F%2Fsynapse.example%2Fplan
+```
+
+Do not put patient names, DOB, or other PHI in query params.
+
 ## Railway Deployment
 
 This project is Railway-ready. The `pnpm build` command produces a production bundle and `pnpm start` runs the Express server.
