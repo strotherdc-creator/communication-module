@@ -1,25 +1,42 @@
-import { useState } from "react";
-import { MessageSquare, Shield, Copy, Loader2, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, MessageSquare, Shield, Copy, Loader2, CheckCircle2 } from "lucide-react";
 import { generateCommunicationResponse, type GenerateResponse } from "@/lib/api";
+import {
+  completeDeeplinkHandoff,
+  parseDeeplinkSearch,
+  type Channel,
+  type Direction,
+} from "@/lib/deeplink";
 import { toast } from "sonner";
 
-export type Channel = "text" | "email" | "verbal";
-export type Direction = "incoming" | "outgoing" | "both";
+export type { Channel, Direction };
+
+function initialFromDeeplink() {
+  if (typeof window === "undefined") {
+    return parseDeeplinkSearch("");
+  }
+  return parseDeeplinkSearch(window.location.search);
+}
 
 export default function Home() {
-  const [conversation, setConversation] = useState("");
-  const [desiredOutcome, setDesiredOutcome] = useState("");
-  const [channel, setChannel] = useState<Channel>("text");
-  const [direction, setDirection] = useState<Direction>("incoming");
-  const [showAdvanced, setShowAdvanced] = useState(true);
-  const [emotionalTone, setEmotionalTone] = useState("");
-  const [relationshipStage, setRelationshipStage] = useState("");
-  const [knownObstacles, setKnownObstacles] = useState("");
-  const [urgency, setUrgency] = useState("");
-  const [coachMode, setCoachMode] = useState(false);
+  const deeplink = useMemo(() => initialFromDeeplink(), []);
+
+  const [conversation, setConversation] = useState(deeplink.conversation ?? "");
+  const [desiredOutcome, setDesiredOutcome] = useState(deeplink.outcome ?? "");
+  const [channel, setChannel] = useState<Channel>(deeplink.channel ?? "text");
+  const [direction, setDirection] = useState<Direction>(deeplink.direction ?? "incoming");
+  const [emotionalTone, setEmotionalTone] = useState(deeplink.tone ?? "");
+  const [relationshipStage, setRelationshipStage] = useState(deeplink.stage ?? "");
+  const [knownObstacles, setKnownObstacles] = useState(deeplink.obstacles ?? "");
+  const [urgency, setUrgency] = useState(deeplink.urgency ?? "");
+  const [coachMode, setCoachMode] = useState(deeplink.coachMode);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const returnUrl = deeplink.returnUrl;
+  const planStepId = deeplink.planStepId;
+  const scriptId = deeplink.scriptId;
 
   const handleGenerate = async () => {
     if (!conversation.trim()) { toast.error("Paste the conversation first"); return; }
@@ -63,27 +80,59 @@ export default function Home() {
     setConversation("");
     setDesiredOutcome("");
     setResult(null);
-    setShowAdvanced(true);
     setEmotionalTone("");
     setRelationshipStage("");
     setKnownObstacles("");
     setUrgency("");
   };
 
+  const handleDone = () => {
+    if (!returnUrl) {
+      toast.error("No return link provided");
+      return;
+    }
+    const handoff = completeDeeplinkHandoff(returnUrl, planStepId);
+    if (!handoff.ok) {
+      toast.error(handoff.error);
+      return;
+    }
+    window.location.assign(handoff.href);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
               <MessageSquare className="w-4 h-4 text-primary" />
             </div>
-            <span className="font-semibold text-sm tracking-tight">Communication Coach</span>
+            <span className="font-semibold text-sm tracking-tight truncate">Communication Coach</span>
+            {scriptId && (
+              <span
+                className="hidden sm:inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground truncate max-w-[10rem]"
+                title={scriptId}
+              >
+                {scriptId}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Shield className="w-3.5 h-3.5" />
-            <span>Ethical Influence</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {returnUrl && (
+              <button
+                type="button"
+                onClick={handleDone}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-semibold text-foreground hover:opacity-90"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Done
+              </button>
+            )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Shield className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Ethical Influence</span>
+            </div>
           </div>
         </div>
       </header>
@@ -168,8 +217,7 @@ export default function Home() {
             {/* Extra context — always visible */}
             <p className="text-base font-bold text-foreground">Extra context (optional)</p>
 
-            {showAdvanced && (
-              <div className="space-y-3 pl-2 border-l-2 border-primary/30">
+            <div className="space-y-3 pl-2 border-l-2 border-primary/30">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-sm font-semibold text-muted-foreground">Their tone</label>
@@ -211,7 +259,6 @@ export default function Home() {
                   </button>
                 </div>
               </div>
-            )}
 
             {/* Generate button */}
             <button
@@ -221,6 +268,17 @@ export default function Home() {
             >
               {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Thinking...</> : "Get Response"}
             </button>
+
+            {returnUrl && (
+              <button
+                type="button"
+                onClick={handleDone}
+                className="w-full py-3 rounded-xl bg-muted text-foreground text-base font-semibold hover:opacity-80 transition-colors inline-flex items-center justify-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Done — back to plan
+              </button>
+            )}
           </div>
         )}
 
@@ -294,13 +352,25 @@ export default function Home() {
               </div>
             )}
 
-            {/* Start Over */}
-            <button
-              onClick={handleReset}
-              className="w-full py-4 rounded-xl bg-muted text-foreground text-lg font-bold hover:opacity-80 transition-colors"
-            >
-              New Conversation
-            </button>
+            {/* Start Over / Done */}
+            <div className="space-y-3">
+              {returnUrl && (
+                <button
+                  type="button"
+                  onClick={handleDone}
+                  className="w-full py-4 rounded-xl bg-primary text-primary-foreground text-lg font-bold hover:opacity-90 transition-colors inline-flex items-center justify-center gap-2"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                  Done — back to plan
+                </button>
+              )}
+              <button
+                onClick={handleReset}
+                className="w-full py-4 rounded-xl bg-muted text-foreground text-lg font-bold hover:opacity-80 transition-colors"
+              >
+                New Conversation
+              </button>
+            </div>
           </div>
         )}
       </main>
